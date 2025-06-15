@@ -3,8 +3,11 @@ from typing import List, Type
 import pandas as pd
 
 from models.base import BaseModel
+from models.cooccurrence import CooccurrenceModel
+from models.ensemble import EnsembleModel
 from models.popularity import PopularityModel
 from models.random_rec import RandomRecModel
+from models.repurchase import RepurchaseModel
 from schema.config import Config
 from schema.models import Metrics
 from utils.dataloader import DataLoader
@@ -23,7 +26,7 @@ def evaluate(
     """
     単一のモデルを評価し、メトリクスを計算する関数。
     """
-    logger.info(f"--- Evaluating {model.__class__.__name__} ---")
+    logger.info(f"Evaluating {model.__class__.__name__}")
     pred_df = model.predict(eval_df)
     merged_df = true_items_df.merge(pred_df, on="customer_id", how="left")
     metrics = metrics_calculator.calc(merged_df, "true_items", "pred_items")
@@ -39,16 +42,14 @@ def main():
     valid_true_df = dataset.valid_df.groupby("customer_id").agg(true_items=("article_id", list)).reset_index()
     test_true_df = dataset.test_df.groupby("customer_id").agg(true_items=("article_id", list)).reset_index()
 
-    models_to_run: List[Type[BaseModel]] = [
-        PopularityModel,
-        RandomRecModel,
-    ]
+    models_to_run: List[Type[BaseModel]] = [CooccurrenceModel, RepurchaseModel, PopularityModel, RandomRecModel]
 
     all_results = []
+    fitted_base_models: List[BaseModel] = []
 
     for model_class in models_to_run:
         model = model_class(cfg)
-        logger.info(f"===== Running for model: {model.__class__.__name__} =====")
+        logger.info(f"Running for model: {model.__class__.__name__}")
 
         model.fit(dataset.train_df.copy())
 
@@ -60,8 +61,21 @@ def main():
         test_result = {"model": model.__class__.__name__, "split": "test", **test_metrics.model_dump()}
         all_results.append(test_result)
 
+        fitted_base_models.append(model)
+
+    ensemble_weights = [1.0, 1.0, 1.0, 1.0]
+    ensemble_model = EnsembleModel(cfg, models=fitted_base_models, weights=ensemble_weights)
+
+    val_metrics = evaluate(ensemble_model, dataset.valid_df.copy(), valid_true_df, metrics_calculator)
+    val_result = {"model": ensemble_model.__class__.__name__, "split": "validation", **val_metrics.model_dump()}
+    all_results.append(val_result)
+
+    test_metrics = evaluate(ensemble_model, dataset.test_df.copy(), test_true_df, metrics_calculator)
+    test_result = {"model": ensemble_model.__class__.__name__, "split": "test", **test_metrics.model_dump()}
+    all_results.append(test_result)
+
     results_df = pd.DataFrame(all_results)
-    logger.info("===== All Model Results Summary =====")
+    logger.info("All Model Results Summary")
 
     print("\n--- Evaluation Results ---")
     print(results_df.round(4))

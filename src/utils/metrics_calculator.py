@@ -73,6 +73,8 @@ class MetricsCalculator:
 
     def ndcg_at_k(self, true_items: List[int], pred_items: List[int]) -> float:
         user_relevances = self.get_user_relevance(true_items, pred_items)
+        if sum(user_relevances) == 0:
+            return 0
         dcg_max = self.dcg_at_k(sorted(user_relevances, reverse=True))
         if not dcg_max:
             return 0

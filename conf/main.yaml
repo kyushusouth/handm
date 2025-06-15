@@ -3,7 +3,7 @@ log_config_path: ~/dev/otto/conf/log.yaml
 data:
   train_data_path: ~/dev/handm/h-and-m-personalized-fashion-recommendations/transactions_train.csv
   chunksize: 10000
-  train_start_date: 2020-07-01
+  train_start_date: 2020-08-01
   train_end_date: 2020-08-24
   valid_start_date: 2020-08-25
   valid_end_date: 2020-08-31
