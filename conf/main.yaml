@@ -1,15 +1,71 @@
-seed: 42
+seed: &seed 42
 log_config_path: ~/dev/otto/conf/log.yaml
 data:
   train_data_path: ~/dev/handm/h-and-m-personalized-fashion-recommendations/transactions_train.csv
+  customer_data_path: ~/dev/handm/h-and-m-personalized-fashion-recommendations/customers.csv
+  articles_data_path: ~/dev/handm/h-and-m-personalized-fashion-recommendations/articles.csv
   chunksize: 10000
-  train_start_date: 2020-08-01
-  train_end_date: 2020-08-24
-  valid_start_date: 2020-08-25
-  valid_end_date: 2020-08-31
-  test_start_date: 2020-09-01
+  train_start_date: 2020-08-19
+  train_end_date: 2020-09-01
+  valid_start_date: 2020-09-02
+  valid_end_date: 2020-09-04
+  test_start_date: 2020-09-05
   test_end_date: 2020-09-07
 model:
-train:
+  ranker:
+    _common_params: &ranker_common_params
+      boosting_type: "gbdt"
+      verbosity: -1
+      seed: *seed
+      n_estimators: 1000
+      learning_rate: 0.05
+      num_leaves: 31
+      max_depth: 7
+      reg_alpha: 0.1
+      reg_lambda: 0.1
+      colsample_bytree: 0.8
+      subsample: 0.8
+      subsample_freq: 1
+    pointwise:
+      <<: *ranker_common_params
+      objective: "binary"
+      metric: "binary_logloss"
+      scale_pos_weight: 
+    listwise:
+      <<: *ranker_common_params
+      objective: "lambdarank"
+      metric: "map"
+      eval_at: [1, 5, 12]
+      lambdarank_truncation_level: 12
+    early_stopping_rounds: 50
+features:
+  num_cols: [
+    "price",
+    "age",
+    "mean_price",
+    "num_purchases",
+    "recent_sales",
+  ]
+  cat_cols: [
+    "FN",
+    "Active",
+    "club_member_status",
+    "fashion_news_frequency",
+    # "postal_code",
+    # "product_code",
+    # "prod_name",
+    "product_type_no",
+    "product_group_name",
+    "graphical_appearance_no",
+    "colour_group_code",
+    "perceived_colour_value_id",
+    "perceived_colour_master_id",
+    "department_no",
+    "index_code",
+    "index_group_no",
+    "section_no",
+    "garment_group_no",
+    # "detail_desc",
+  ]
 eval:
-  num_rec: 10
+  num_rec: 12

@@ -8,6 +8,8 @@ class Dataset(BaseModel):
     train_df: pd.DataFrame
     valid_df: pd.DataFrame
     test_df: pd.DataFrame
+    customers_df: pd.DataFrame
+    articles_df: pd.DataFrame
 
     model_config = {"arbitrary_types_allowed": True, "frozen": True}
 
