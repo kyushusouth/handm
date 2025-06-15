@@ -5,6 +5,12 @@ import yaml
 from pydantic import BaseModel
 
 
+class MLflowConfig(BaseModel):
+    tracking_uri: str
+    experiment_name: str
+    run_name: str
+
+
 class DataConfig(BaseModel):
     """データ関連の設定"""
 
@@ -86,6 +92,7 @@ class Config(BaseModel):
 
     seed: int
     log_config_path: str
+    mlflow: MLflowConfig
     data: DataConfig
     model: ModelConfig
     features: FeaturesConfig

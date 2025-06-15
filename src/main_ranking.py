@@ -1,5 +1,6 @@
 from typing import List, Type
 
+import mlflow
 import pandas as pd
 
 from models.base import BaseModel
@@ -22,11 +23,20 @@ logger = get_logger(__name__)
 
 
 def evaluate(
-    pred_df: pd.DataFrame,
+    eval_df: pd.DataFrame,
+    model: BaseRanker,
+    cfg: Config,
     true_items_df: pd.DataFrame,
     metrics_calculator: MetricsCalculator,
 ) -> Metrics:
-    """予測結果に対するメトリクスの計算を行う"""
+    """評価データに対するメトリクスの計算"""
+    pred_df = (
+        eval_df.assign(pred=lambda df: model.predict(df[cfg.features.cat_cols + cfg.features.num_cols]))
+        .sort_values(["customer_id", "pred"], ascending=[True, False])
+        .groupby(["customer_id"])
+        .agg(pred_items=("article_id", list))
+    )
+    pred_df["pred_items"] = pred_df["pred_items"].apply(lambda x: x[: cfg.eval.num_rec])
     merged_df = true_items_df.merge(pred_df, on="customer_id", how="left")
     metrics = metrics_calculator.calc(merged_df, "true_items", "pred_items")
     return metrics
@@ -69,11 +79,13 @@ def generate_candidates(
 def format_data_for_ranker(
     transactions_df: pd.DataFrame,
     candidates_df: pd.DataFrame,
-    features_df: pd.DataFrame,
+    customer_feature_df: pd.DataFrame,
+    article_feature_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """ランク学習のためにデータを整形"""
     return (
-        candidates_df.merge(features_df, on=["customer_id", "article_id"], how="left")
+        candidates_df.merge(customer_feature_df, on="customer_id", how="left")
+        .merge(article_feature_df, on="article_id", how="left")
         .merge(
             transactions_df[["customer_id", "article_id"]].assign(target=1),
             on=["customer_id", "article_id"],
@@ -87,10 +99,14 @@ def format_data_for_ranker(
 def main():
     cfg = Config.load_config("../conf/main.yaml")
 
+    mlflow.set_tracking_uri(cfg.mlflow.tracking_uri)
+    mlflow.set_experiment(cfg.mlflow.experiment_name)
+
     dataset = DataLoader(cfg).load()
     feature_transformer = FeatureTransformer(cfg)
     metrics_calculator = MetricsCalculator(cfg)
 
+    valid_true_df = dataset.valid_df.groupby("customer_id").agg(true_items=("article_id", list)).reset_index()
     test_true_df = dataset.test_df.groupby("customer_id").agg(true_items=("article_id", list)).reset_index()
 
     logger.info("Phase 1: Candidate Generation")
@@ -100,38 +116,40 @@ def main():
 
     logger.info("Phase 2: Feature Engineering")
     feature_transformer.fit(dataset.articles_df, dataset.customers_df)
-    train_features_df = feature_transformer.transform(dataset.train_df, dataset.customers_df, dataset.articles_df)
-    valid_features_df = feature_transformer.transform(dataset.valid_df, dataset.customers_df, dataset.articles_df)
-    test_features_df = feature_transformer.transform(dataset.test_df, dataset.customers_df, dataset.articles_df)
+    customer_feature_df, article_feature_df = feature_transformer.transform(
+        dataset.train_df, dataset.customers_df, dataset.articles_df
+    )
 
     logger.info("Phase 3: Format Data")
-    train_df = format_data_for_ranker(dataset.train_df.copy(), train_candidates_df, train_features_df)
-    valid_df = format_data_for_ranker(dataset.valid_df.copy(), valid_candidates_df, valid_features_df)
-    test_df = format_data_for_ranker(dataset.test_df.copy(), test_candidates_df, test_features_df)
+    train_df = format_data_for_ranker(
+        dataset.train_df.copy(), train_candidates_df, customer_feature_df, article_feature_df
+    )
+    valid_df = format_data_for_ranker(
+        dataset.valid_df.copy(), valid_candidates_df, customer_feature_df, article_feature_df
+    )
+    test_df = format_data_for_ranker(
+        dataset.test_df.copy(), test_candidates_df, customer_feature_df, article_feature_df
+    )
 
     logger.info("Phase 4: Training and Evaluation")
     rankers_to_run: List[Type[BaseRanker]] = [
         PointwiseRanker,
         ListwiseRanker,
     ]
-    all_results = []
-    for ranker_class in rankers_to_run:
-        logger.info(f"Running for model: {ranker_class.__name__}")
-        model = ranker_class(cfg)
-        model.fit(train_df, valid_df)
-        pred_df = (
-            test_df.assign(pred=lambda df: model.predict(df[cfg.features.cat_cols + cfg.features.num_cols]))
-            .sort_values(["customer_id", "pred"], ascending=[True, False])
-            .groupby(["customer_id"])
-            .agg(pred_items=("article_id", list))
-        )
-        pred_df["pred_items"] = pred_df["pred_items"].apply(lambda x: x[: cfg.eval.num_rec])
-        metrics = evaluate(pred_df, test_true_df, metrics_calculator)
-        all_results.append({"model": model.__class__.__name__, **metrics.model_dump()})
 
-    results_df = pd.DataFrame(all_results)
-    print("\n--- Evaluation Results ---")
-    print(results_df.round(4))
+    for ranker_class in rankers_to_run:
+        with mlflow.start_run(run_name=ranker_class.__name__):
+            logger.info(f"Running for model: {ranker_class.__name__}")
+            mlflow.log_params(cfg.model_dump())
+
+            model = ranker_class(cfg)
+            model.fit(train_df, valid_df)
+
+            valid_metrics = evaluate(valid_df, model, cfg, valid_true_df, metrics_calculator)
+            mlflow.log_metrics({f"valid_{k}": v for k, v in valid_metrics.model_dump().items()})
+
+            test_metrics = evaluate(test_df, model, cfg, test_true_df, metrics_calculator)
+            mlflow.log_metrics({f"test_{k}": v for k, v in test_metrics.model_dump().items()})
 
 
 if __name__ == "__main__":

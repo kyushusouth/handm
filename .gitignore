@@ -10,3 +10,4 @@ wheels/
 .venv
 
 h-and-m-personalized-fashion-recommendations/
+mlruns/
