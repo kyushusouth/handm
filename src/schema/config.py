@@ -8,12 +8,9 @@ from pydantic import BaseModel
 class MLflowConfig(BaseModel):
     tracking_uri: str
     experiment_name: str
-    run_name: str
 
 
 class DataConfig(BaseModel):
-    """データ関連の設定"""
-
     train_data_path: str
     customer_data_path: str
     articles_data_path: str
@@ -26,9 +23,42 @@ class DataConfig(BaseModel):
     test_end_date: date
 
 
-class BaseRankerParams(BaseModel):
-    """PointwiseとListwiseで共通するLGBMのパラメータ"""
+class ConcurrenceModelConfig(BaseModel):
+    model_uri: Optional[str] = None
 
+
+class RepurchaseModelConfig(BaseModel):
+    model_uri: Optional[str] = None
+
+
+class PopularityModelConfig(BaseModel):
+    model_uri: Optional[str] = None
+
+
+class RandomModelConfig(BaseModel):
+    model_uri: Optional[str] = None
+
+
+class EnsembleModelConfig(BaseModel):
+    weights: List[float]
+    model_uri: Optional[str] = None
+
+
+class IMFModelParams(BaseModel):
+    factors: int
+    regularization: float
+    alpha: float
+    iterations: int
+    random_state: int
+
+
+class IMFModelConfig(BaseModel):
+    params: IMFModelParams
+    run_id: Optional[str] = None
+    model_uri: Optional[str] = None
+
+
+class RankerCommonParams(BaseModel):
     boosting_type: str
     verbosity: int
     seed: int
@@ -43,53 +73,56 @@ class BaseRankerParams(BaseModel):
     subsample_freq: int
 
 
-class PointwiseRankerParams(BaseRankerParams):
-    """Pointwise Rankerに特有のパラメータ"""
-
+class PointwiseRankerParams(RankerCommonParams):
     objective: Literal["binary"]
     metric: Literal["auc", "binary_logloss"]
     scale_pos_weight: Optional[float] = None
 
 
-class ListwiseRankerParams(BaseRankerParams):
-    """Listwise Rankerに特有のパラメータ"""
-
+class ListwiseRankerParams(RankerCommonParams):
     objective: Literal["lambdarank"]
     metric: Literal["map", "ndcg"]
     eval_at: List[int]
     lambdarank_truncation_level: int
 
 
-class RankerConfig(BaseModel):
-    """ランキングモデル全体の設定"""
+class PointwiseRankerConfig(BaseModel):
+    params: PointwiseRankerParams
+    model_uri: Optional[str] = None
 
-    pointwise: PointwiseRankerParams
-    listwise: ListwiseRankerParams
+
+class ListwiseRankerConfig(BaseModel):
+    params: ListwiseRankerParams
+    model_uri: Optional[str] = None
+
+
+class RankerConfig(BaseModel):
+    pointwise: PointwiseRankerConfig
+    listwise: ListwiseRankerConfig
     early_stopping_rounds: int
+    num_candidates: int
 
 
 class ModelConfig(BaseModel):
-    """モデル全般の設定"""
-
+    cooccurrence: ConcurrenceModelConfig
+    repurchase: RepurchaseModelConfig
+    popularity: PopularityModelConfig
+    random: RandomModelConfig
+    ensemble: EnsembleModelConfig
+    imf: IMFModelConfig
     ranker: RankerConfig
 
 
 class FeaturesConfig(BaseModel):
-    """特徴量の設定"""
-
     num_cols: List[str]
     cat_cols: List[str]
 
 
 class EvalConfig(BaseModel):
-    """評価に関わる設定"""
-
     num_rec: int
 
 
 class Config(BaseModel):
-    """プロジェクト全体のConfigを管理するトップレベルクラス"""
-
     seed: int
     log_config_path: str
     mlflow: MLflowConfig

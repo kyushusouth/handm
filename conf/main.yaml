@@ -2,20 +2,39 @@ seed: &seed 42
 log_config_path: ~/dev/otto/conf/log.yaml
 mlflow:
   tracking_uri: mlruns
-  experiment_name: h-and-m-personalized-fashion-recommendations
-  run_name: test
+  experiment_name: h-and-m-personalized-fashion-recommendations-20250616
 data:
   train_data_path: ~/dev/handm/h-and-m-personalized-fashion-recommendations/transactions_train.csv
   customer_data_path: ~/dev/handm/h-and-m-personalized-fashion-recommendations/customers.csv
   articles_data_path: ~/dev/handm/h-and-m-personalized-fashion-recommendations/articles.csv
   chunksize: 10000
-  train_start_date: 2020-08-19
-  train_end_date: 2020-09-01
-  valid_start_date: 2020-09-02
-  valid_end_date: 2020-09-04
-  test_start_date: 2020-09-05
+  train_start_date: 2020-09-03
+  train_end_date: 2020-09-05
+  valid_start_date: 2020-09-06
+  valid_end_date: 2020-09-06
+  test_start_date: 2020-09-07
   test_end_date: 2020-09-07
 model:
+  cooccurrence:
+    model_uri: runs:/13cae358c635473aa5bed0b196affd41/CooccurrenceModel
+  repurchase:
+    model_uri: runs:/15eb49d592ac498fbb10e8ddb31317b6/RepurchaseModel
+  popularity:
+    model_uri: runs:/0f49667ede794f2c9fa560c1e5dc73ac/PopularityModel
+  random:
+    model_uri: runs:/dced086ea38d49e5886d03df1e27c0a2/RandomRecModel
+  ensemble:
+    weights: [1.0, 1.0, 1.0, 1.0, 1.0]
+    model_uri:
+  imf:
+    params:
+      factors: 32
+      regularization: 0.01
+      alpha: 1.0
+      iterations: 50
+      random_state: *seed
+    run_id: 004f9098688840b4ae0926aadb406352
+    model_uri: runs:/004f9098688840b4ae0926aadb406352/IMFModel
   ranker:
     _common_params: &ranker_common_params
       boosting_type: "gbdt"
@@ -31,44 +50,114 @@ model:
       subsample: 0.8
       subsample_freq: 1
     pointwise:
-      <<: *ranker_common_params
-      objective: "binary"
-      metric: "binary_logloss"
-      scale_pos_weight: 
+      params:
+        <<: *ranker_common_params
+        objective: "binary"
+        metric: "binary_logloss"
+        scale_pos_weight:
+      model_uri: 
     listwise:
-      <<: *ranker_common_params
-      objective: "lambdarank"
-      metric: "map"
-      eval_at: [1, 5, 12]
-      lambdarank_truncation_level: 12
+      params:
+        <<: *ranker_common_params
+        objective: "lambdarank"
+        metric: "map"
+        eval_at: [1, 5, 12]
+        lambdarank_truncation_level: 12
+      model_uri:
     early_stopping_rounds: 50
+    num_candidates: 100
 features:
-  num_cols: [
-    "age",
-    "mean_price",
-    "num_purchases",
-    "recent_sales",
-  ]
+  num_cols:
+    [
+      "age",
+      "mean_price",
+      "num_purchases",
+      "recent_sales",
+      "user_emb_0",
+      "user_emb_1",
+      "user_emb_2",
+      "user_emb_3",
+      "user_emb_4",
+      "user_emb_5",
+      "user_emb_6",
+      "user_emb_7",
+      "user_emb_8",
+      "user_emb_9",
+      "user_emb_10",
+      "user_emb_11",
+      "user_emb_12",
+      "user_emb_13",
+      "user_emb_14",
+      "user_emb_15",
+      "user_emb_16",
+      "user_emb_17",
+      "user_emb_18",
+      "user_emb_19",
+      "user_emb_20",
+      "user_emb_21",
+      "user_emb_22",
+      "user_emb_23",
+      "user_emb_24",
+      "user_emb_25",
+      "user_emb_26",
+      "user_emb_27",
+      "user_emb_28",
+      "user_emb_29",
+      "user_emb_30",
+      "user_emb_31",
+      "item_emb_0",
+      "item_emb_1",
+      "item_emb_2",
+      "item_emb_3",
+      "item_emb_4",
+      "item_emb_5",
+      "item_emb_6",
+      "item_emb_7",
+      "item_emb_8",
+      "item_emb_9",
+      "item_emb_10",
+      "item_emb_11",
+      "item_emb_12",
+      "item_emb_13",
+      "item_emb_14",
+      "item_emb_15",
+      "item_emb_16",
+      "item_emb_17",
+      "item_emb_18",
+      "item_emb_19",
+      "item_emb_20",
+      "item_emb_21",
+      "item_emb_22",
+      "item_emb_23",
+      "item_emb_24",
+      "item_emb_25",
+      "item_emb_26",
+      "item_emb_27",
+      "item_emb_28",
+      "item_emb_29",
+      "item_emb_30",
+      "item_emb_31",
+    ]
   cat_cols: [
-    "FN",
-    "Active",
-    "club_member_status",
-    "fashion_news_frequency",
-    "product_type_no",
-    "product_group_name",
-    "graphical_appearance_no",
-    "colour_group_code",
-    "perceived_colour_value_id",
-    "perceived_colour_master_id",
-    "department_no",
-    "index_code",
-    "index_group_no",
-    "section_no",
-    "garment_group_no",
-    # "postal_code",
-    # "product_code",
-    # "prod_name",
-    # "detail_desc",
-  ]
+      "FN",
+      "Active",
+      "club_member_status",
+      "fashion_news_frequency",
+      "product_type_no",
+      "product_group_name",
+      "graphical_appearance_no",
+      "colour_group_code",
+      "perceived_colour_value_id",
+      "perceived_colour_master_id",
+      "department_no",
+      "index_code",
+      "index_group_no",
+      "section_no",
+      "garment_group_no",
+      # "postal_code",
+      # "product_code",
+      # "prod_name",
+      # "detail_desc",
+    ]
 eval:
   num_rec: 12

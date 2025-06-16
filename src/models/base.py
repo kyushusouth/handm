@@ -48,7 +48,7 @@ class BaseModel(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def predict(self, X: pd.DataFrame) -> pd.DataFrame:
+    def predict(self, X: pd.DataFrame, **kwargs) -> pd.DataFrame:
         """
         予測対象の顧客情報などが入ったDataFrameを受け取り、予測結果を付与したDataFrameを返す
         """

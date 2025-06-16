@@ -33,16 +33,16 @@ class RepurchaseModel(BaseModel):
         return self
 
     @check_is_fitted
-    def predict(self, X: pd.DataFrame) -> pd.DataFrame:
+    def predict(self, X: pd.DataFrame, **kwargs) -> pd.DataFrame:
         """
         fitで作成した購入履歴辞書から、各顧客への推薦リストを生成する。
         """
-        target_customer_ids = X["customer_id"].unique()
+        num_rec = kwargs.get("num_rec", self.cfg.eval.num_rec)
 
         preds = []
-        for customer_id in target_customer_ids:
+        for customer_id in X["customer_id"].unique():
             past_purchases = self.customer_purchase_history.get(customer_id, [])
-            pred_items = past_purchases[: self.cfg.eval.num_rec]
+            pred_items = past_purchases[:num_rec]
             preds.append({"customer_id": customer_id, "pred_items": pred_items})
 
         return pd.DataFrame(preds)

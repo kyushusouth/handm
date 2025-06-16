@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 class PointwiseRanker(BaseRanker):
     def __init__(self, cfg: Config):
         super().__init__(cfg)
-        self.model = lgb.LGBMClassifier(**cfg.model.ranker.pointwise.model_dump())
+        self.model = lgb.LGBMClassifier(**cfg.model.ranker.pointwise.params.model_dump())
 
     def fit(self, train_df: pd.DataFrame, valid_df: pd.DataFrame):
         logger.info(f"Fitting {self.__class__.__name__}...")

@@ -18,9 +18,10 @@ class PopularityModel(BaseModel):
         return self
 
     @check_is_fitted
-    def predict(self, X: pd.DataFrame) -> pd.DataFrame:
-        target_cs_ids = X["customer_id"].unique()
-        pred_df = pd.DataFrame({"customer_id": target_cs_ids}).assign(
-            pred_items=lambda df: [self.items_popularity_order[: self.cfg.eval.num_rec]] * len(df)
+    def predict(self, X: pd.DataFrame, **kwargs) -> pd.DataFrame:
+        num_rec = kwargs.get("num_rec", self.cfg.eval.num_rec)
+
+        pred_df = pd.DataFrame({"customer_id": X["customer_id"].unique()}).assign(
+            pred_items=lambda df: [self.items_popularity_order[:num_rec]] * len(df)
         )
         return pred_df

@@ -3,8 +3,6 @@ from pydantic import BaseModel
 
 
 class Dataset(BaseModel):
-    """データセット"""
-
     train_df: pd.DataFrame
     valid_df: pd.DataFrame
     test_df: pd.DataFrame
@@ -15,8 +13,6 @@ class Dataset(BaseModel):
 
 
 class Metrics(BaseModel):
-    """評価指標"""
-
     precision: float
     recall: float
     f1: float

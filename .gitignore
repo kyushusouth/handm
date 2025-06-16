@@ -11,3 +11,4 @@ wheels/
 
 h-and-m-personalized-fashion-recommendations/
 mlruns/
+src/test.py

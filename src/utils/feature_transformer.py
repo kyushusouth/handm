@@ -1,5 +1,7 @@
+import os
 from typing import Dict, Tuple
 
+import mlflow
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 
@@ -17,6 +19,9 @@ class FeatureTransformer:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.label_encoders: Dict[str, LabelEncoder] = {}
+        factors_dir = mlflow.artifacts.download_artifacts(run_id=cfg.model.imf.run_id, artifact_path="embeddings")
+        self.imf_customer_factors = pd.read_parquet(os.path.join(factors_dir, "user_factors.parquet"))
+        self.imf_article_factors = pd.read_parquet(os.path.join(factors_dir, "item_factors.parquet"))
 
     def fit(self, articles_df: pd.DataFrame, customers_df: pd.DataFrame) -> "FeatureTransformer":
         """学習用データを使ったLabelEncoderの学習"""
@@ -75,6 +80,9 @@ class FeatureTransformer:
 
         self._convert_cat_features(customer_feature_df)
         self._convert_cat_features(article_feature_df)
+
+        customer_feature_df = customer_feature_df.merge(self.imf_customer_factors, on="customer_id", how="left")
+        article_feature_df = article_feature_df.merge(self.imf_article_factors, on="article_id", how="left")
 
         logger.info(f"Feature transformation complete. {customer_feature_df.shape=}, {article_feature_df.shape=}")
         return customer_feature_df, article_feature_df

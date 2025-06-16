@@ -1,14 +1,11 @@
+import tempfile
+from pathlib import Path
 from typing import List, Type
 
 import mlflow
 import pandas as pd
 
 from models.base import BaseModel
-from models.cooccurrence import CooccurrenceModel
-from models.ensemble import EnsembleModel
-from models.popularity import PopularityModel
-from models.random_rec import RandomRecModel
-from models.repurchase import RepurchaseModel
 from rankers.base import BaseRanker
 from rankers.listwise import ListwiseRanker
 from rankers.pointwise import PointwiseRanker
@@ -44,35 +41,27 @@ def evaluate(
 
 def generate_candidates(
     cfg: Config,
-    target_customer_ids: List[str],
-    transactions_df: pd.DataFrame,
+    target_customer_ids: pd.DataFrame,
 ) -> pd.DataFrame:
     """複数の候補生成モデルを使い、候補リストを作成する"""
-    candidate_models: List[Type[BaseModel]] = [
-        CooccurrenceModel,
-        RepurchaseModel,
-        PopularityModel,
-        RandomRecModel,
+    candidate_models: List[BaseModel] = [
+        mlflow.pyfunc.load_model(cfg.model.cooccurrence.model_uri),
+        mlflow.pyfunc.load_model(cfg.model.repurchase.model_uri),
+        mlflow.pyfunc.load_model(cfg.model.popularity.model_uri),
+        mlflow.pyfunc.load_model(cfg.model.random.model_uri),
+        mlflow.pyfunc.load_model(cfg.model.imf.model_uri),
     ]
-    fitted_base_models: List[BaseModel] = []
     all_candidates = []
 
-    for model_class in candidate_models:
-        model = model_class(cfg).fit(transactions_df)
+    for model in candidate_models:
         logger.info(f"Running for model: {model.__class__.__name__}")
-        preds_df = model.predict(pd.DataFrame({"customer_id": target_customer_ids}))
+        preds_df = model.predict(target_customer_ids, params={"num_rec": cfg.model.ranker.num_candidates})
         candidates = preds_df.explode("pred_items").rename(columns={"pred_items": "article_id"})
         all_candidates.append(candidates)
-        fitted_base_models.append(model)
 
-    ensemble_weights = [1.0, 1.0, 1.0, 1.0]
-    model = EnsembleModel(cfg, models=fitted_base_models, weights=ensemble_weights)
-    preds_df = model.predict(pd.DataFrame({"customer_id": target_customer_ids}))
-    candidates = preds_df.explode("pred_items").rename(columns={"pred_items": "article_id"})
-    all_candidates.append(candidates)
-
-    candidates_df = pd.concat(all_candidates).drop_duplicates()
-    logger.info(f"Generated {len(candidates_df)} candidates for {len(target_customer_ids)} customers.")
+    candidates_df = (
+        pd.concat(all_candidates).drop_duplicates().dropna(axis=0, how="any", subset=["customer_id", "article_id"])
+    )
     return candidates_df
 
 
@@ -92,12 +81,14 @@ def format_data_for_ranker(
             how="left",
         )
         .fillna({"target": 0})
+        .assign(customer_id=lambda df: df["customer_id"].astype(str))
         .sort_values("customer_id")
     )
 
 
 def main():
-    cfg = Config.load_config("../conf/main.yaml")
+    config_path = Path(__file__).resolve().parent.parent / "conf" / "main.yaml"
+    cfg = Config.load_config(str(config_path))
 
     mlflow.set_tracking_uri(cfg.mlflow.tracking_uri)
     mlflow.set_experiment(cfg.mlflow.experiment_name)
@@ -110,9 +101,9 @@ def main():
     test_true_df = dataset.test_df.groupby("customer_id").agg(true_items=("article_id", list)).reset_index()
 
     logger.info("Phase 1: Candidate Generation")
-    train_candidates_df = generate_candidates(cfg, dataset.train_df["customer_id"].unique(), dataset.train_df)
-    valid_candidates_df = generate_candidates(cfg, dataset.valid_df["customer_id"].unique(), dataset.train_df)
-    test_candidates_df = generate_candidates(cfg, dataset.test_df["customer_id"].unique(), dataset.train_df)
+    train_candidates_df = generate_candidates(cfg, dataset.train_df[["customer_id"]])
+    valid_candidates_df = generate_candidates(cfg, dataset.valid_df[["customer_id"]])
+    test_candidates_df = generate_candidates(cfg, dataset.test_df[["customer_id"]])
 
     logger.info("Phase 2: Feature Engineering")
     feature_transformer.fit(dataset.articles_df, dataset.customers_df)
@@ -137,19 +128,31 @@ def main():
         ListwiseRanker,
     ]
 
-    for ranker_class in rankers_to_run:
-        with mlflow.start_run(run_name=ranker_class.__name__):
-            logger.info(f"Running for model: {ranker_class.__name__}")
-            mlflow.log_params(cfg.model_dump())
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for ranker_class in rankers_to_run:
+            with mlflow.start_run(run_name=ranker_class.__name__):
+                logger.info(f"Running for model: {ranker_class.__name__}")
+                mlflow.log_params(cfg.model_dump())
 
-            model = ranker_class(cfg)
-            model.fit(train_df, valid_df)
+                model = ranker_class(cfg)
+                model.fit(train_df, valid_df)
 
-            valid_metrics = evaluate(valid_df, model, cfg, valid_true_df, metrics_calculator)
-            mlflow.log_metrics({f"valid_{k}": v for k, v in valid_metrics.model_dump().items()})
+                valid_metrics = evaluate(valid_df, model, cfg, valid_true_df, metrics_calculator)
+                mlflow.log_metrics({f"valid_{k}": v for k, v in valid_metrics.model_dump().items()})
 
-            test_metrics = evaluate(test_df, model, cfg, test_true_df, metrics_calculator)
-            mlflow.log_metrics({f"test_{k}": v for k, v in test_metrics.model_dump().items()})
+                test_metrics = evaluate(test_df, model, cfg, test_true_df, metrics_calculator)
+                mlflow.log_metrics({f"test_{k}": v for k, v in test_metrics.model_dump().items()})
+
+                # pickle_path = os.path.join(tmpdir, f"{model.__class__.__name__}.pkl")
+                # with open(pickle_path, "wb") as f:
+                #     pickle.dump(model, f)
+
+                # mlflow.pyfunc.log_model(
+                #     name=f"{model.__class__.__name__}",
+                #     python_model=MlflowModelWrapper(),
+                #     artifacts={"model_pickle_path": pickle_path},
+                #     input_example=test_df.head(),
+                # )
 
 
 if __name__ == "__main__":

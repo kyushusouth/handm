@@ -39,21 +39,21 @@ class CooccurrenceModel(BaseModel):
         return self
 
     @check_is_fitted
-    def predict(self, X: pd.DataFrame) -> pd.DataFrame:
+    def predict(self, X: pd.DataFrame, **kwargs) -> pd.DataFrame:
         """
         各顧客の最終購入アイテムに基づき、共起アイテムを推薦する。
         """
-        target_customer_ids = X["customer_id"].unique()
+        num_rec = kwargs.get("num_rec", self.cfg.eval.num_rec)
 
         preds = []
-        for cid in target_customer_ids:
+        for cid in X["customer_id"].unique():
             pred_items = []
             last_aid = self.last_purchases.get(cid)
 
             if last_aid and last_aid in self.cooccurrence_dict:
                 co_items = self.cooccurrence_dict[last_aid]
-                pred_items = sorted(co_items, key=co_items.get, reverse=True)[: self.cfg.eval.num_rec]
+                pred_items = sorted(co_items, key=co_items.get, reverse=True)[:num_rec]
 
-            preds.append({"customer_id": cid, "pred_items": pred_items})
+            preds.append({"customer_id": cid, "pred_items": " ".join([str(item) for item in pred_items])})
 
         return pd.DataFrame(preds)

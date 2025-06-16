@@ -1,10 +1,18 @@
+import os
+import pickle
+import tempfile
+from pathlib import Path
 from typing import List, Type
 
+import mlflow
 import pandas as pd
+from mlflow.models.signature import ModelSignature
+from mlflow.types import DataType
+from mlflow.types.schema import ColSpec, ParamSchema, ParamSpec, Schema
 
 from models.base import BaseModel
 from models.cooccurrence import CooccurrenceModel
-from models.ensemble import EnsembleModel
+from models.mlflow_wrapper import MlflowModelWrapper
 from models.popularity import PopularityModel
 from models.random_rec import RandomRecModel
 from models.repurchase import RepurchaseModel
@@ -23,47 +31,65 @@ def evaluate(
     metrics_calculator: MetricsCalculator,
 ) -> Metrics:
     """予測結果に対するメトリクスの計算を行う"""
+    pred_df["pred_items"] = pred_df["pred_items"].apply(lambda x: [int(item) for item in x.split()])
     merged_df = true_items_df.merge(pred_df, on="customer_id", how="left")
     metrics = metrics_calculator.calc(merged_df, "true_items", "pred_items")
     return metrics
 
 
 def main():
-    cfg = Config.load_config("../conf/main.yaml")
+    config_path = Path(__file__).resolve().parent.parent / "conf" / "main.yaml"
+    cfg = Config.load_config(str(config_path))
+
+    mlflow.set_tracking_uri(cfg.mlflow.tracking_uri)
+    mlflow.set_experiment(cfg.mlflow.experiment_name)
 
     dataset = DataLoader(cfg).load()
     metrics_calculator = MetricsCalculator(cfg)
 
+    valid_true_df = dataset.valid_df.groupby("customer_id").agg(true_items=("article_id", list)).reset_index()
     test_true_df = dataset.test_df.groupby("customer_id").agg(true_items=("article_id", list)).reset_index()
 
     models_to_run: List[Type[BaseModel]] = [
         CooccurrenceModel,
-        RepurchaseModel,
-        PopularityModel,
-        RandomRecModel,
+        # RepurchaseModel,
+        # PopularityModel,
+        # RandomRecModel,
     ]
 
-    all_results = []
-    fitted_base_models: List[BaseModel] = []
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for model_class in models_to_run:
+            with mlflow.start_run(run_name=model_class.__name__):
+                mlflow.log_params(cfg.model_dump())
 
-    for model_class in models_to_run:
-        model = model_class(cfg)
-        logger.info(f"Running for model: {model.__class__.__name__}")
-        model.fit(dataset.train_df.copy())
-        pred_df = model.predict(dataset.test_df.copy())
-        metrics = evaluate(pred_df, test_true_df, metrics_calculator)
-        all_results.append({"model": model.__class__.__name__, **metrics.model_dump()})
-        fitted_base_models.append(model)
+                model = model_class(cfg)
+                model.fit(dataset.train_df.copy())
 
-    ensemble_weights = [1.0, 1.0, 1.0, 1.0]
-    model = EnsembleModel(cfg, models=fitted_base_models, weights=ensemble_weights)
-    pred_df = model.predict(dataset.test_df.copy())
-    metrics = evaluate(pred_df, test_true_df, metrics_calculator)
-    all_results.append({"model": model.__class__.__name__, **metrics.model_dump()})
+                valid_pred_df = model.predict(dataset.valid_df[["customer_id"]], num_rec=cfg.eval.num_rec)
+                valid_metrics = evaluate(valid_pred_df, valid_true_df, metrics_calculator)
+                mlflow.log_metrics({f"valid_{k}": v for k, v in valid_metrics.model_dump().items()})
 
-    results_df = pd.DataFrame(all_results)
-    print("\n--- Evaluation Results ---")
-    print(results_df.round(4))
+                test_pred_df = model.predict(dataset.test_df[["customer_id"]], num_rec=cfg.eval.num_rec)
+                test_metrics = evaluate(test_pred_df, test_true_df, metrics_calculator)
+                mlflow.log_metrics({f"test_{k}": v for k, v in test_metrics.model_dump().items()})
+
+                pickle_path = os.path.join(tmpdir, f"{model.__class__.__name__}.pkl")
+                with open(pickle_path, "wb") as f:
+                    pickle.dump(model, f)
+
+                mlflow.pyfunc.log_model(
+                    name=f"{model.__class__.__name__}",
+                    python_model=MlflowModelWrapper(),
+                    artifacts={"model_pickle_path": pickle_path},
+                    input_example=dataset.test_df.head()[["customer_id"]],
+                    signature=ModelSignature(
+                        inputs=Schema([ColSpec("string", "customer_id")]),
+                        outputs=Schema([ColSpec("string", "customer_id"), ColSpec("string", "pred_items")]),
+                        params=ParamSchema(
+                            [ParamSpec(name="num_rec", dtype=DataType.integer, default=cfg.eval.num_rec)]
+                        ),
+                    ),
+                )
 
 
 if __name__ == "__main__":
