@@ -43,6 +43,6 @@ class RepurchaseModel(BaseModel):
         for customer_id in X["customer_id"].unique():
             past_purchases = self.customer_purchase_history.get(customer_id, [])
             pred_items = past_purchases[:num_rec]
-            preds.append({"customer_id": customer_id, "pred_items": pred_items})
+            preds.append({"customer_id": customer_id, "pred_items": " ".join([str(item) for item in pred_items])})
 
         return pd.DataFrame(preds)

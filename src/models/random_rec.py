@@ -26,4 +26,7 @@ class RandomRecModel(BaseModel):
         pred_df = pd.DataFrame({"customer_id": X["customer_id"].unique()}).assign(
             pred_items=lambda df: [random.sample(self.items, num_rec)] * len(df)
         )
+        pred_df["pred_items"] = pred_df["pred_items"].apply(
+            lambda pred_items: " ".join([str(item) for item in pred_items])
+        )
         return pred_df

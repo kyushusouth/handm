@@ -81,10 +81,10 @@ class IMFModel(BaseModel):
         for customer_index, article_indices in zip(target_customer_indices, all_article_indices):
             customer_id = self.customer_index2id[customer_index]
             pred_items = [self.article_index2id[article_index] for article_index in article_indices]
-            preds.append({"customer_id": customer_id, "pred_items": pred_items})
+            preds.append({"customer_id": customer_id, "pred_items": " ".join([str(item) for item in pred_items])})
 
         pred_df = pd.DataFrame(preds)
         pred_df = pd.DataFrame({"customer_id": X["customer_id"].unique()}).merge(pred_df, on="customer_id", how="left")
-        pred_df["pred_items"] = pred_df["pred_items"].apply(lambda x: [] if np.any(pd.isna(x)) else x)
+        pred_df["pred_items"] = pred_df["pred_items"].fillna("")
 
         return pred_df

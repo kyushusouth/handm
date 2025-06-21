@@ -55,8 +55,9 @@ def generate_candidates(
 
     for model in candidate_models:
         logger.info(f"Running for model: {model.__class__.__name__}")
-        preds_df = model.predict(target_customer_ids, params={"num_rec": cfg.model.ranker.num_candidates})
-        candidates = preds_df.explode("pred_items").rename(columns={"pred_items": "article_id"})
+        pred_df = model.predict(target_customer_ids, params={"num_rec": cfg.model.ranker.num_candidates})
+        pred_df["pred_items"] = pred_df["pred_items"].apply(lambda x: [int(item) for item in x.split()])
+        candidates = pred_df.explode("pred_items").rename(columns={"pred_items": "article_id"})
         all_candidates.append(candidates)
 
     candidates_df = (

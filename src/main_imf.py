@@ -5,6 +5,9 @@ from pathlib import Path
 
 import mlflow
 import pandas as pd
+from mlflow.models.signature import ModelSignature
+from mlflow.types import DataType
+from mlflow.types.schema import ColSpec, ParamSchema, ParamSpec, Schema
 
 from models.imf import IMFModel
 from models.mlflow_wrapper import MlflowModelWrapper
@@ -23,6 +26,7 @@ def evaluate(
     metrics_calculator: MetricsCalculator,
 ) -> Metrics:
     """予測結果に対するメトリクスの計算を行う"""
+    pred_df["pred_items"] = pred_df["pred_items"].apply(lambda x: [int(item) for item in x.split()])
     merged_df = true_items_df.merge(pred_df, on="customer_id", how="left")
     metrics = metrics_calculator.calc(merged_df, "true_items", "pred_items")
     return metrics
@@ -65,6 +69,11 @@ def main():
                 python_model=MlflowModelWrapper(),
                 artifacts={"model_pickle_path": pickle_path},
                 input_example=dataset.test_df.head()[["customer_id"]],
+                signature=ModelSignature(
+                    inputs=Schema([ColSpec("string", "customer_id")]),
+                    outputs=Schema([ColSpec("string", "customer_id"), ColSpec("string", "pred_items")]),
+                    params=ParamSchema([ParamSpec(name="num_rec", dtype=DataType.integer, default=cfg.eval.num_rec)]),
+                ),
             )
 
             user_factors_path = os.path.join(tmpdir, "user_factors.parquet")

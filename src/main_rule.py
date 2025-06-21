@@ -52,9 +52,9 @@ def main():
 
     models_to_run: List[Type[BaseModel]] = [
         CooccurrenceModel,
-        # RepurchaseModel,
-        # PopularityModel,
-        # RandomRecModel,
+        RepurchaseModel,
+        PopularityModel,
+        RandomRecModel,
     ]
 
     with tempfile.TemporaryDirectory() as tmpdir:
