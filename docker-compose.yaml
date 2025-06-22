@@ -1,0 +1,9 @@
+services:
+  app:
+    build:
+      context: .
+    volumes:
+      - ./conf:/app/conf
+      - ./data:/app/data
+      - ./src:/app/src
+    tty: true

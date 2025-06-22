@@ -28,7 +28,7 @@ class DataLoader:
         start_date = pd.to_datetime(self.cfg.data.train_start_date)  # noqa: F841
         end_date = pd.to_datetime(self.cfg.data.test_end_date)  # noqa: F841
         filtered_chunks = []
-        for chunk in pd.read_csv(os.path.expanduser(self.cfg.data.train_data_path), chunksize=self.cfg.data.chunksize):
+        for chunk in pd.read_csv(self.cfg.data.train_data_path, chunksize=self.cfg.data.chunksize):
             chunk["t_dat"] = pd.to_datetime(chunk["t_dat"])
             filtered_chunk = chunk.query("@start_date <= t_dat <= @end_date")
             if not filtered_chunk.empty:
@@ -37,9 +37,7 @@ class DataLoader:
 
         all_customers = data_df["customer_id"].unique()  # noqa: F841
         filtered_chunks = []
-        for chunk in pd.read_csv(
-            os.path.expanduser(self.cfg.data.customer_data_path), chunksize=self.cfg.data.chunksize
-        ):
+        for chunk in pd.read_csv(self.cfg.data.customer_data_path, chunksize=self.cfg.data.chunksize):
             filtered_chunk = chunk.query("customer_id in @all_customers")
             if not filtered_chunk.empty:
                 filtered_chunks.append(filtered_chunk)
@@ -47,9 +45,7 @@ class DataLoader:
 
         all_articles = data_df["article_id"].unique()  # noqa: F841
         filtered_chunks = []
-        for chunk in pd.read_csv(
-            os.path.expanduser(self.cfg.data.articles_data_path), chunksize=self.cfg.data.chunksize
-        ):
+        for chunk in pd.read_csv(self.cfg.data.articles_data_path, chunksize=self.cfg.data.chunksize):
             filtered_chunk = chunk.query("article_id in @all_articles")
             if not filtered_chunk.empty:
                 filtered_chunks.append(filtered_chunk)

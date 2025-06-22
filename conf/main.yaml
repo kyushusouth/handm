@@ -4,9 +4,9 @@ mlflow:
   tracking_uri: mlruns
   experiment_name: h-and-m-personalized-fashion-recommendations-20250616
 data:
-  train_data_path: ~/dev/handm/h-and-m-personalized-fashion-recommendations/transactions_train.csv
-  customer_data_path: ~/dev/handm/h-and-m-personalized-fashion-recommendations/customers.csv
-  articles_data_path: ~/dev/handm/h-and-m-personalized-fashion-recommendations/articles.csv
+  train_data_path: /app/data/transactions_train.csv
+  customer_data_path: /app/data/customers.csv
+  articles_data_path: /app/data/articles.csv
   chunksize: 10000
   train_start_date: 2020-09-03
   train_end_date: 2020-09-05

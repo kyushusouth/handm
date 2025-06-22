@@ -9,6 +9,6 @@ wheels/
 # Virtual environments
 .venv
 
-h-and-m-personalized-fashion-recommendations/
+data/
 mlruns/
 src/test.py

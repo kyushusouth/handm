@@ -1,0 +1,30 @@
+# Docker関連ファイル
+Dockerfile
+docker-compose.yml
+README.md
+
+# Pythonの仮想環境
+.venv
+
+# IDE/エディタの設定ファイル
+.vscode
+
+# Pythonのキャッシュファイル
+__pycache__
+*.pyc
+
+# MLflowの実行結果
+mlruns
+
+# データディレクトリ（データはボリュームマウントで供給するため）
+data
+
+# テストキャッシュ
+.pytest_cache
+
+# Jupyter Notebookのチェックポイント
+.ipynb_checkpoints
+
+# Git管理ファイル
+.git
+.gitignore
